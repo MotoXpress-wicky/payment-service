@@ -31,4 +31,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID>, JpaSpec
     List<Payment> findByTrackingNumberIn(Collection<String> trackingNumbers);
 
     List<Payment> findByCourierReceiptIdOrderByPaymentNoAsc(UUID courierReceiptId);
+
+    long countByCourierReceiptId(UUID courierReceiptId);
 }
