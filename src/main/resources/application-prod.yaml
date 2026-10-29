@@ -1,0 +1,5 @@
+# Profile "prod": a real server. No defaults for secrets: the service refuses to start without them.
+logging:
+  level:
+    root: WARN
+    com.ecommerce: INFO

@@ -1,0 +1,70 @@
+# Test-only configuration. It must be named application.yaml so it replaces the main one during tests.
+# Every value is fake and safe to commit.
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway builds the tables from the real SQL files. Hibernate only checks them.
+      ddl-auto: validate
+  rabbitmq:
+    listener:
+      simple:
+        # No RabbitMQ runs during unit tests, so the listeners must not start.
+        auto-startup: false
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 7MB
+
+management:
+  health:
+    # RabbitMQ does not run during unit tests.
+    rabbit:
+      enabled: false
+
+auth:
+  token:
+    secret: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF # gitleaks:allow (fake, tests only)
+  cookie:
+    name: access_token
+
+payments:
+  payment-number-prefix: "PAY-"
+  couriers:
+    - Courier A
+    - Courier B
+  default-page-size: 20
+  max-page-size: 100
+  receipt-file:
+    max-size-bytes: 5242880
+  max-tracking-numbers-per-receipt: 200
+
+events:
+  exchange: app.events
+  queue: payment.order-events
+  listen:
+    - { name: order.placed, action: CREATE }
+    - { name: order.shipped, action: SET_SHIPMENT }
+    - { name: order.delivered, action: COLLECT }
+    - { name: order.returned, action: CANCEL }
+    - { name: order.cancelled, action: CANCEL }
+
+storage:
+  s3:
+    endpoint: http://localhost:9
+    region: us-east-1
+    access-key: test
+    secret-key: test
+    bucket: courier-receipts
+
+logging:
+  level:
+    org.springframework.web: WARN
+    org.hibernate: WARN

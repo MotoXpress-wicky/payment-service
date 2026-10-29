@@ -1,0 +1,176 @@
+# =========================
+# Maven
+# =========================
+target/
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Maven generated files
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+
+# =========================
+# Environment
+# =========================
+.env
+
+
+# =========================
+# Java
+# =========================
+*.class
+*.log
+
+# BlueJ
+*.ctxt
+
+# Java archives
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# JVM crash logs
+hs_err_pid*
+
+
+# =========================
+# Build
+# =========================
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+.gradle/
+
+
+# =========================
+# IntelliJ IDEA
+# =========================
+.idea/
+*.iws
+*.iml
+*.ipr
+
+
+# =========================
+# Eclipse / STS
+# =========================
+.metadata
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# Eclipse generated/build files
+bin/
+tmp/
+
+# External tool builders
+.externalToolBuilders/
+
+# Eclipse launch configurations
+*.launch
+
+# Eclipse recommendations
+.recommenders/
+
+# Eclipse patch
+.loadpath
+
+
+# =========================
+# NetBeans
+# =========================
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+
+
+# =========================
+# Git / Temporary files
+# =========================
+*.orig
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+
+*.tmp
+*.bak
+*.swp
+*~
+
+.#*
+*#
+
+*.DS_Store
+*.sw?
+
+# Sublime Text
+*.sublime-*
+
+# Scratch
+/scratch
+
+# Exercism
+.exercism
+
+
+# =========================
+# Windows
+# =========================
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+
+# =========================
+# Other
+# =========================
+local.properties
+
+# TeXlipse
+.texlipse
+
+# Tern
+.tern-project
+
+# PyDev
+*.pydevproject
+
+# CDT
+.cproject
+.autotools
+
+# Scala IDE
+.cache-main
+.scala_dependencies
+.worksheet
+
+db

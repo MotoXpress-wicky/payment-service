@@ -1,0 +1,22 @@
+# Profile "dev": the service runs in IntelliJ and uses the helper containers on localhost.
+# These values work only on your PC (same as environments/local/env/*.env).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/payment_db
+    username: payment_service
+    password: payment_service_local_pass
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: motoxpress
+    password: rabbitmq_local_pass
+
+auth:
+  token:
+    secret: local-dev-only-jwt-secret-never-use-on-a-server-0123456789
+
+storage:
+  s3:
+    endpoint: http://localhost:8333
+    access-key: payment-service-local
+    secret-key: payment-service-local-secret

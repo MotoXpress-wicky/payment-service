@@ -1,0 +1,5 @@
+# Profile "docker": the service runs as a container. Every address and password
+# comes from environments/<env>/env/payment-service.env.
+logging:
+  level:
+    root: INFO
