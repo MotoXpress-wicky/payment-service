@@ -50,7 +50,7 @@ public class EventPublisher {
     /** Runs after the commit of the transaction that saved the event (or at once without a transaction). */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     void sendNow(SendNow ignored) {
-        relay.flush();
+        relay.signal();
     }
 
     /** "Something was saved in the outbox": a signal that waits inside Spring until the commit. */

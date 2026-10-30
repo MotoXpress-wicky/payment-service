@@ -7,6 +7,7 @@ import com.ecommerce.paymentservice.repository.OutboxEventRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,8 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -48,10 +51,17 @@ public class OutboxRelay {
     private final String exchange;
     private final OutboxProperties properties;
     private final ReentrantLock lock = new ReentrantLock();
+    private final Executor executor;
+    /** true while a send is waiting for the executor. A new signal then needs no second task. */
+    private final AtomicBoolean signalled = new AtomicBoolean(false);
+    /** When RabbitMQ last refused a message. Empty after a success. */
+    private volatile Instant lastFailure;
 
     public OutboxRelay(OutboxEventRepository outbox, RabbitTemplate rabbit, ObjectMapper json,
-                       PlatformTransactionManager transactionManager, EventsProperties events, OutboxProperties properties) {
+                       PlatformTransactionManager transactionManager, EventsProperties events, OutboxProperties properties,
+                       @Qualifier("outboxExecutor") Executor executor) {
         this.outbox = outbox;
+        this.executor = executor;
         this.rabbit = rabbit;
         this.json = json;
         // Every write here runs in its OWN new transaction. This matters: flush() is called right after a commit,
@@ -63,26 +73,71 @@ public class OutboxRelay {
         this.properties = properties;
     }
 
+    /**
+     * Called right after a commit: "something is waiting". It does not send by itself. It asks the sending thread to do
+     * a round (see OutboxExecutorConfig) and returns at once, so a request never waits for RabbitMQ, and many requests
+     * never wait for each other. Signals that arrive while a round is already waiting are folded into it. A signal that
+     * arrives while a round is running starts one more round, so no event is forgotten.
+     */
+    public void signal() {
+        if (signalled.compareAndSet(false, true)) {
+            executor.execute(() -> {
+                signalled.set(false);
+                try {
+                    flushAfterCommit();
+                } catch (RuntimeException e) {
+                    // The events stay in the table. The retry job sends them.
+                    log.error("Outbox sending round failed", e);
+                }
+            });
+        }
+    }
+
+    /**
+     * One round for the sending thread. Like flush(), but it does nothing while RabbitMQ is "on pause" (it refused a
+     * message a moment ago): the retry job sends the waiting events in the right sequence instead.
+     */
+    public int flushAfterCommit() {
+        lock.lock();
+        try {
+            if (pausedAfterFailure()) {
+                return 0;
+            }
+            return flushWithLock();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** Sends the waiting events, oldest first, until one fails or the batch is done. Returns how many were sent. */
     public int flush() {
         lock.lock();
         try {
-            int sent = 0;
-            List<OutboxEvent> waiting = outbox.findWaiting(PageRequest.of(0, properties.batchSize()));
-            for (OutboxEvent event : waiting) {
-                Boolean ok = send(event);
-                if (ok == null) {
-                    continue;      // this one can never be sent (bad JSON). Do not block the others behind it.
-                }
-                if (!ok) {
-                    break;         // RabbitMQ is not answering. Keep the sequence, try again later.
-                }
-                sent++;
-            }
-            return sent;
+            return flushWithLock();
         } finally {
             lock.unlock();
         }
+    }
+
+    private boolean pausedAfterFailure() {
+        Instant failed = lastFailure;
+        return failed != null && Instant.now().isBefore(failed.plus(properties.failurePause()));
+    }
+
+    private int flushWithLock() {
+        int sent = 0;
+        List<OutboxEvent> waiting = outbox.findWaiting(PageRequest.of(0, properties.batchSize()));
+        for (OutboxEvent event : waiting) {
+            Boolean ok = send(event);
+            if (ok == null) {
+                continue;      // this one can never be sent (bad JSON). Do not block the others behind it.
+            }
+            if (!ok) {
+                break;         // RabbitMQ is not answering. Keep the sequence, try again later.
+            }
+            sent++;
+        }
+        return sent;
     }
 
     /** true = sent, false = RabbitMQ problem (stop), null = the stored event is broken (skip it). */
@@ -107,8 +162,10 @@ public class OutboxRelay {
             log.error("Could not publish event '{}' (message {}). It stays in the outbox and is tried again.",
                     event.getEventName(), event.getId(), e);
             markFailed(event, e.getMessage());
+            lastFailure = Instant.now();
             return false;
         }
+        lastFailure = null;
         transaction.executeWithoutResult(status -> outbox.markSent(event.getId(), Instant.now()));
         // The body is not logged: it holds names and addresses.
         log.info("Published event '{}' (message {})", event.getEventName(), event.getId());

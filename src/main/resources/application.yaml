@@ -80,6 +80,8 @@ events:
   outbox:
     enabled: true          # false turns off the background retry and cleanup
     retry-interval: 10s    # how often waiting events are tried again
+    failure-pause: 10s     # after RabbitMQ refused a message, the sending thread does not try again for this long
+    async: true            # one background thread sends. false = inside the request (tests only)
     batch-size: 50         # events per sending round
     keep: 7d               # sent events are deleted after this time
   listen:
