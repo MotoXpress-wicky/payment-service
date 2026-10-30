@@ -49,6 +49,8 @@ payments:
 events:
   exchange: app.events
   queue: payment.order-events
+  outbox:
+    enabled: false         # no background job during a test
   listen:
     - { name: order.placed, action: CREATE }
     - { name: order.shipped, action: SET_SHIPMENT }

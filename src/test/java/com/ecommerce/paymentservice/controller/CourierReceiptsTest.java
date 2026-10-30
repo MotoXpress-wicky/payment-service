@@ -4,12 +4,14 @@ import com.ecommerce.paymentservice.TestTokens;
 import com.ecommerce.paymentservice.entity.Payment;
 import com.ecommerce.paymentservice.entity.PaymentMethod;
 import com.ecommerce.paymentservice.entity.PaymentStatus;
+import com.ecommerce.paymentservice.repository.OutboxEventRepository;
 import com.ecommerce.paymentservice.repository.CourierReceiptRepository;
 import com.ecommerce.paymentservice.repository.PaymentRepository;
 import com.ecommerce.paymentservice.service.storage.ObjectStorage;
 import com.ecommerce.paymentservice.service.storage.ObjectStorage.StoredFile;
 import com.ecommerce.paymentservice.service.storage.StorageException;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.MessagePostProcessor;
@@ -62,6 +64,15 @@ class CourierReceiptsTest {
 
     @MockitoBean
     RabbitTemplate rabbit;
+
+    @Autowired
+    OutboxEventRepository outbox;
+
+    @BeforeEach
+    void emptyTheOutbox() {
+        // Events of other tests that were never sent (there was no RabbitMQ mock) must not be sent during this test.
+        outbox.deleteAll();
+    }
     @MockitoBean
     ObjectStorage storage;
 
