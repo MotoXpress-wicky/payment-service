@@ -1,66 +1,59 @@
 package com.ecommerce.paymentservice.event;
 
-import com.ecommerce.paymentservice.config.EventsProperties;
 import com.ecommerce.paymentservice.config.filter.RequestIdFilter;
-import lombok.extern.slf4j.Slf4j;
+import com.ecommerce.paymentservice.entity.OutboxEvent;
+import com.ecommerce.paymentservice.repository.OutboxEventRepository;
 import org.slf4j.MDC;
-import org.springframework.amqp.AmqpException;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Publishes events to RabbitMQ, but only AFTER the database transaction has committed (M19).
- * We never announce something that was rolled back.
- *
- * How: publish() only hands a small object to Spring. The method send() waits for the commit
- * (TransactionalEventListener) and then sends. Without a transaction it sends at once.
- *
- * Known limit (M19, accepted for the MVP): if RabbitMQ is down at that moment, the event is lost
- * and only an error is logged. A reliable "outbox" table can replace this later.
+ * Announces events with an OUTBOX (M46, replaces the "lost if RabbitMQ is down" limit of M19).
+ * <p>
+ * publish() does not talk to RabbitMQ. It saves the event in the table outbox_events, in the SAME transaction as
+ * the change it announces. So the change and its event are saved together or not at all, and an event of a rolled
+ * back change never exists.
+ * <p>
+ * After the commit, OutboxRelay sends the waiting events at once. If RabbitMQ is down, they wait in the table and a
+ * scheduled retry sends them later. The request of the user is never broken by RabbitMQ.
+ * <p>
+ * Without a transaction, publish() saves the row and sends at once.
  */
-@Slf4j
 @Component
 public class EventPublisher {
 
+    private final OutboxEventRepository outbox;
+    private final ObjectMapper json;
     private final ApplicationEventPublisher spring;
-    private final RabbitTemplate rabbit;
-    private final String exchange;
+    private final OutboxRelay relay;
 
-    public EventPublisher(ApplicationEventPublisher spring, RabbitTemplate rabbit, EventsProperties events) {
+    public EventPublisher(OutboxEventRepository outbox, ObjectMapper json, ApplicationEventPublisher spring, OutboxRelay relay) {
+        this.outbox = outbox;
+        this.json = json;
         this.spring = spring;
-        this.rabbit = rabbit;
-        this.exchange = events.exchange();
+        this.relay = relay;
     }
 
     /** The name is the routing key, for example "payment.collected". */
     public void publish(String eventName, Map<String, Object> body) {
-        spring.publishEvent(new PendingEvent(eventName, UUID.randomUUID(), MDC.get(RequestIdFilter.MDC_KEY), body));
+        // The id is also the messageId header. A retry sends the same id, so listeners can skip a duplicate.
+        outbox.save(new OutboxEvent(UUID.randomUUID(), eventName, json.writeValueAsString(body), MDC.get(RequestIdFilter.MDC_KEY)));
+        spring.publishEvent(new SendNow());
     }
 
+    /** Runs after the commit of the transaction that saved the event (or at once without a transaction). */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    void send(PendingEvent event) {
-        try {
-            rabbit.convertAndSend(exchange, event.name(), event.body(), message -> {
-                message.getMessageProperties().setHeader("messageId", event.messageId().toString());
-                if (event.traceId() != null) {
-                    message.getMessageProperties().setHeader("traceId", event.traceId());
-                }
-                return message;
-            });
-            // The body is not logged: it holds names and addresses.
-            log.info("Published event '{}' (message {})", event.name(), event.messageId());
-        } catch (AmqpException e) {
-            log.error("Could not publish event '{}' (message {}). It is lost.", event.name(), event.messageId(), e);
-        }
+    void sendNow(SendNow ignored) {
+        relay.flush();
     }
 
-    /** Waits inside Spring until the transaction commits. */
-    record PendingEvent(String name, UUID messageId, String traceId, Map<String, Object> body) {
+    /** "Something was saved in the outbox": a signal that waits inside Spring until the commit. */
+    record SendNow() {
     }
 }
