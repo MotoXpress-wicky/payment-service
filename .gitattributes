@@ -1,0 +1,18 @@
+# One line ending rule for everyone, on every computer. Without it, Windows turns the files into CRLF,
+# and Git warns "LF will be replaced by CRLF" on every commit.
+* text=auto eol=lf
+
+# These must be LF, or they fail inside Linux containers ("bad interpreter", "\r: command not found").
+mvnw text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# Windows scripts want CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Never change the bytes of binary files.
+*.jar binary
+*.png binary
+*.jpg binary
+*.pdf binary
