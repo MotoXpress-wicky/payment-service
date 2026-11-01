@@ -55,6 +55,13 @@ and the answer lists every problem (`TRACKING_NUMBER_UNKNOWN`, `WRONG_COURIER`, 
 Error codes (shared 7-field JSON): `RECEIPT_ALREADY_ENTERED`, `TRACKING_NUMBER_UNKNOWN`, `WRONG_COURIER`,
 `PAYMENT_NOT_COLLECTED`, `INVALID_FILE`, `NOT_FOUND`, `VALIDATION_FAILED`, `ACCESS_DENIED` and the token codes.
 
+## Events (the outbox)
+
+`payment.collected`, `payment.succeeded` and `payment.cancelled` go through an outbox: the event is saved in the table
+`outbox_events` in the same transaction as the payment change, and one background thread sends it to RabbitMQ after the
+commit. If RabbitMQ is down the events wait and a retry (every 10 s) sends them later, oldest first, with the same
+`messageId`. The settings `events.outbox.*` are the same as in order-service. Decision M46.
+
 ## Settings
 
 | Setting | Env name | Meaning |
